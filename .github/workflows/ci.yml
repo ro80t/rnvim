@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build, Vet & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node (for the devcontainer CLI)
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Install devcontainer CLI
+        run: npm install -g @devcontainers/cli
+
+      - name: Check formatting (gofmt)
+        run: |
+          fmt_out="$(gofmt -l .)"
+          if [ -n "$fmt_out" ]; then
+            echo "The following files are not gofmt-ed:"
+            echo "$fmt_out"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test ./... -race -cover
+
+  assets:
+    name: Upload Assets (${{ matrix.goos }}/${{ matrix.goarch }})
+    if: github.event_name == 'release'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+          - goos: windows
+            goarch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          bin="rnvim-${{ matrix.goos }}-${{ matrix.goarch }}"
+          [ "${{ matrix.goos }}" = windows ] && bin="$bin.exe"
+          go build -o "$bin" .
+          echo "BIN=$bin" >> "$GITHUB_ENV"
+
+      - name: Compress
+        run: |
+          if [ "${{ matrix.goos }}" = windows ]; then
+            asset="${BIN%.exe}.zip"
+            zip "$asset" "$BIN"
+          else
+            asset="$BIN.tar.gz"
+            tar czf "$asset" "$BIN"
+          fi
+          echo "ASSET=$asset" >> "$GITHUB_ENV"
+
+      - name: Upload
+        uses: softprops/action-gh-release@v3
+        with:
+          files: ${{ env.ASSET }}
