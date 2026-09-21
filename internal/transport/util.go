@@ -8,18 +8,18 @@ import (
 	"strings"
 )
 
-// shQuote single-quotes s for embedding in a posix shell command line.
 func shQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// parentDir returns the posix parent directory of a remote path.
+// path.Dir, not filepath.Dir: the target is always posix regardless of the
+// local OS (e.g. a Windows host still needs "/" parent-dir logic here).
 func parentDir(p string) string {
 	return path.Dir(p)
 }
 
-// buildRemoteCommand renders env exports followed by a shell-quoted argv,
-// for transports (ssh) that must ship a single command string.
+// ssh has no argv-exec like docker/podman: everything ships as one
+// command string, so env exports and args are shell-quoted and joined here.
 func buildRemoteCommand(env map[string]string, args []string) string {
 	var sb strings.Builder
 	for k, v := range env {
@@ -33,11 +33,10 @@ func buildRemoteCommand(env map[string]string, args []string) string {
 	return sb.String()
 }
 
-// runCapture runs cmd with stdout and stderr captured separately, so a
-// remote process's diagnostic/warning output (e.g. ssh's "Warning:
-// Permanently added ... to the list of known hosts") never corrupts stdout
-// that callers parse (Home, Uname, ...). On failure, stderr is folded into
-// the returned error.
+// Captures stdout/stderr separately, not combined: ssh's "Warning:
+// Permanently added ... to the list of known hosts" on stderr once
+// corrupted Home/Uname's stdout parsing. Stderr is folded into the error
+// on failure.
 func runCapture(cmd *exec.Cmd) (string, error) {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
