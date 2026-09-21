@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"os/exec"
 	"path"
+	"regexp"
 	"strings"
 )
+
+var envKeyPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 func shQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
@@ -23,6 +26,12 @@ func parentDir(p string) string {
 func buildRemoteCommand(env map[string]string, args []string) string {
 	var sb strings.Builder
 	for k, v := range env {
+		// export's left-hand side must be a bare identifier, so it can't be
+		// shell-quoted like a value; reject anything else instead of risking
+		// an env key that breaks out of the export statement.
+		if !envKeyPattern.MatchString(k) {
+			panic(fmt.Sprintf("transport: invalid env var name %q", k))
+		}
 		fmt.Fprintf(&sb, "export %s=%s; ", k, shQuote(v))
 	}
 	parts := make([]string, len(args))
