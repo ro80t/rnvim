@@ -3,7 +3,7 @@ package transport
 import (
 	"testing"
 
-	"rnvim/internal/dockertest"
+	"github.com/ro80t/rnvim/internal/dockertest"
 )
 
 // TestContainerTransport runs the shared transport suite against real

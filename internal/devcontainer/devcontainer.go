@@ -15,7 +15,7 @@ import (
 	"slices"
 	"strings"
 
-	"rnvim/internal/transport"
+	"github.com/ro80t/rnvim/internal/transport"
 )
 
 const DefaultNeovimFeature = "ghcr.io/devcontainers-extra/features/neovim:1"

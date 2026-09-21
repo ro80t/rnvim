@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"rnvim/internal/dockertest"
+	"github.com/ro80t/rnvim/internal/dockertest"
 )
 
 // TestUpAndGetContainerID_Docker drives a real `devcontainer up` (requires

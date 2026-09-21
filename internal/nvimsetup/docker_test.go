@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"rnvim/internal/dockertest"
-	"rnvim/internal/transport"
+	"github.com/ro80t/rnvim/internal/dockertest"
+	"github.com/ro80t/rnvim/internal/transport"
 )
 
 // TestEnsure_InstallStrategy_Docker exercises the real "auto" -> install

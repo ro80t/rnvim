@@ -3,8 +3,8 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
-	"rnvim/internal/nvimsetup"
-	"rnvim/internal/transport"
+	"github.com/ro80t/rnvim/internal/nvimsetup"
+	"github.com/ro80t/rnvim/internal/transport"
 )
 
 // provisionFlags are the --strategy/--config/--nvim-bin flags shared by

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"rnvim/internal/dockertest"
+	"github.com/ro80t/rnvim/internal/dockertest"
 )
 
 // TestSSHTransport runs the shared transport suite against a real sshd,

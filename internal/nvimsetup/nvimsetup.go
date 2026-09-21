@@ -13,7 +13,7 @@ import (
 	"runtime"
 	"strings"
 
-	"rnvim/internal/transport"
+	"github.com/ro80t/rnvim/internal/transport"
 )
 
 type Options struct {

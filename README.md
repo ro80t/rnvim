@@ -2,6 +2,12 @@
 
 A Go CLI for quickly connecting nvim to a devcontainer, docker, podman, or ssh target.
 
+## Install
+
+```sh
+go install github.com/ro80t/rnvim@latest
+```
+
 ## Usage
 
 ```

@@ -5,7 +5,7 @@ package main
 import (
 	"os"
 
-	"rnvim/internal/cmd"
+	"github.com/ro80t/rnvim/internal/cmd"
 )
 
 // version is overridable at build time via -ldflags "-X main.version=...".

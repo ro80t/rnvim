@@ -3,7 +3,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
-	"rnvim/internal/devcontainer"
+	"github.com/ro80t/rnvim/internal/devcontainer"
 )
 
 func newDevcontainerCmd() *cobra.Command {
