@@ -76,17 +76,20 @@ this follows.
   package manager, no sudo) and silently trigger the fallback; only `push`
   failing (or `install`/`push` failing when forced explicitly) is a hard
   error. Don't make the install path noisier or more fatal than it already is.
-- **`devcontainer` CLI invocation fails when rnvim itself is run from
-  git-bash/MSYS2 on Windows** (confirmed root cause, not a bug in this repo's
-  code): a minimal `exec.Command("devcontainer", "--version")` fails with
-  `'powershell.exe' is not recognized...` when the Go binary is launched from
-  git-bash, but succeeds from a native PowerShell/cmd.exe session running the
-  exact same binary — @devcontainers/cli's Windows shim itself shells out to
-  `powershell.exe`, and that nested spawn doesn't survive the MSYS2→Win32
-  process boundary. Rebuilding/relaunching doesn't help; running rnvim from a
-  normal Windows terminal (PowerShell, cmd.exe, Windows Terminal, an IDE's
-  integrated terminal) does. Don't "fix" this in `internal/devcontainer` —
-  there's nothing to fix there.
+- **`devcontainer` CLI is invoked via `node` directly, bypassing its own
+  shim** (`devcontainerCommand` in `internal/devcontainer/devcontainer.go`).
+  npm's generated `devcontainer.cmd`/`.ps1`/sh shims all forward to the same
+  `<npm-global-dir>/node_modules/@devcontainers/cli/devcontainer.js`; on
+  Windows, the `.cmd` shim was confirmed (via a minimal repro) to fail
+  outright — `'powershell.exe' is not recognized...` — specifically when
+  rnvim itself is run from git-bash/MSYS2, even though the exact same shim
+  works fine from cmd.exe/PowerShell. Resolving `devcontainer` via
+  `exec.LookPath`, finding its sibling `node_modules/@devcontainers/cli/
+  devcontainer.js`, and running that through `node` directly sidesteps the
+  shim (and its batch-interpretation quirks) entirely, so behavior is now
+  identical regardless of which shell launched rnvim. Falls back to invoking
+  `devcontainer` directly if that layout isn't found (e.g. installed some
+  other way than npm).
 - **No RPC-based remote UI.** Connecting attaches a PTY straight to a remote
   TUI `nvim` process (`exec -it` for docker/podman, `ssh -t` for ssh). There's
   deliberately no `nvim --server`/`--remote-ui` client — that would require

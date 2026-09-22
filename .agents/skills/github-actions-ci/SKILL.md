@@ -66,10 +66,10 @@ Two weekly update checks: `gomod` at `/` (grouped into one PR via
 2. `gofmt -l .` failures: run `gofmt -w .`, don't hand-fix whitespace.
 3. `go vet` failures: fix the underlying issue; don't suppress.
 4. A docker/ssh-backed test failing in CI but not locally (or vice versa)
-   usually means an image pull/network flake, a missing `devcontainer` CLI
-   step, or a local-only environment quirk (see `AGENTS.md`'s note on
-   running rnvim from git-bash/MSYS2 on Windows) rather than the test logic
-   itself — check the step's raw output before assuming the assertion is
-   wrong.
+   usually means an image pull/network flake or a missing `devcontainer` CLI
+   step rather than the test logic itself — check the step's raw output
+   before assuming the assertion is wrong. (Windows/git-bash used to be a
+   third source of this via the `devcontainer` shim; see `AGENTS.md`'s note
+   on `devcontainerCommand` — that's fixed now, not an open caveat.)
 5. `gh run list` / `gh run view --log-failed` inspects a run that already
    happened on GitHub without leaving the terminal.

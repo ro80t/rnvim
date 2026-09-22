@@ -20,6 +20,29 @@ import (
 
 const DefaultNeovimFeature = "ghcr.io/devcontainers-extra/features/neovim:1"
 
+// devcontainerCommand resolves `devcontainer` and, if it's an npm-generated
+// shim (.cmd/.ps1/sh, all forwarding to the same node_modules layout),
+// invokes its underlying devcontainer.js via node directly instead of the
+// shim. On Windows the .cmd shim has been observed to fail outright when
+// rnvim itself is run from git-bash/MSYS2 (its own internal relaunch breaks
+// across that process boundary) despite working fine from cmd.exe/
+// PowerShell; calling node directly skips the shim and behaves the same
+// everywhere. Anything installed a different way (a standalone binary, a
+// dev checkout) just runs as before.
+func devcontainerCommand(args ...string) (*exec.Cmd, error) {
+	binPath, err := exec.LookPath("devcontainer")
+	if err != nil {
+		return nil, err
+	}
+	jsPath := filepath.Join(filepath.Dir(binPath), "node_modules", "@devcontainers", "cli", "devcontainer.js")
+	if nodePath, err := exec.LookPath("node"); err == nil {
+		if _, err := os.Stat(jsPath); err == nil {
+			return exec.Command(nodePath, append([]string{jsPath}, args...)...), nil
+		}
+	}
+	return exec.Command(binPath, args...), nil
+}
+
 func Connect(workspace, feature, localConfig string) error {
 	wsAbs, err := filepath.Abs(workspace)
 	if err != nil {
@@ -55,7 +78,10 @@ func Connect(workspace, feature, localConfig string) error {
 // upAndGetContainerID runs `devcontainer up` and parses the container id
 // out of its JSON result line.
 func upAndGetContainerID(wsAbs string) (string, error) {
-	cmd := exec.Command("devcontainer", "up", "--workspace-folder", wsAbs, "--log-format", "json")
+	cmd, err := devcontainerCommand("up", "--workspace-folder", wsAbs, "--log-format", "json")
+	if err != nil {
+		return "", err
+	}
 	var out bytes.Buffer
 	cmd.Stdout = io.MultiWriter(os.Stdout, &out)
 	cmd.Stderr = os.Stderr
