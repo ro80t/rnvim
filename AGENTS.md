@@ -76,16 +76,17 @@ this follows.
   package manager, no sudo) and silently trigger the fallback; only `push`
   failing (or `install`/`push` failing when forced explicitly) is a hard
   error. Don't make the install path noisier or more fatal than it already is.
-- **`devcontainer` CLI invocation is Windows-fragile.** `internal/devcontainer`
-  shells out via `exec.Command("devcontainer", ...)`. On at least one Windows
-  dev setup, this failed even though `devcontainer --version` worked fine
-  from a normal shell — `exec.LookPath` correctly resolved
-  `devcontainer.cmd`, but running it through Go's `exec.Command` broke inside
-  the npm cmd shim itself (it tries to relaunch via `powershell.exe` and that
-  step failed). Unconfirmed whether this is specific to that machine's npm/
-  Node setup or a broader Windows compatibility gap; if you're debugging a
-  devcontainer-subcommand failure on Windows, check this before assuming the
-  Go code is wrong.
+- **`devcontainer` CLI invocation fails when rnvim itself is run from
+  git-bash/MSYS2 on Windows** (confirmed root cause, not a bug in this repo's
+  code): a minimal `exec.Command("devcontainer", "--version")` fails with
+  `'powershell.exe' is not recognized...` when the Go binary is launched from
+  git-bash, but succeeds from a native PowerShell/cmd.exe session running the
+  exact same binary — @devcontainers/cli's Windows shim itself shells out to
+  `powershell.exe`, and that nested spawn doesn't survive the MSYS2→Win32
+  process boundary. Rebuilding/relaunching doesn't help; running rnvim from a
+  normal Windows terminal (PowerShell, cmd.exe, Windows Terminal, an IDE's
+  integrated terminal) does. Don't "fix" this in `internal/devcontainer` —
+  there's nothing to fix there.
 - **No RPC-based remote UI.** Connecting attaches a PTY straight to a remote
   TUI `nvim` process (`exec -it` for docker/podman, `ssh -t` for ssh). There's
   deliberately no `nvim --server`/`--remote-ui` client — that would require
