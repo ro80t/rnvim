@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/ro80t/rnvim/internal/nvimsetup"
 	"github.com/ro80t/rnvim/internal/transport"
 )
 
@@ -60,19 +61,13 @@ func Connect(workspace, feature, localConfig string) error {
 
 	ct := transport.NewContainerTransport("docker", containerID)
 
-	if localConfig != "" {
-		if _, statErr := os.Stat(localConfig); statErr == nil {
-			home, err := ct.Home()
-			if err != nil || home == "" {
-				home = "/root"
-			}
-			if err := ct.CopyTo(localConfig, home+"/.config/nvim"); err != nil {
-				fmt.Fprintln(os.Stderr, "rnvim: warning: failed to copy local config into devcontainer:", err)
-			}
-		}
+	base := nvimsetup.RemoteBase(ct)
+	env, err := nvimsetup.IsolatedEnv(ct, base, localConfig)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "rnvim: warning: failed to copy local config into devcontainer:", err)
+		env, _ = nvimsetup.IsolatedEnv(ct, base, "")
 	}
-
-	return ct.RunInteractive(nil, "nvim")
+	return ct.RunInteractive(env, "nvim")
 }
 
 // upAndGetContainerID runs `devcontainer up` and parses the container id
