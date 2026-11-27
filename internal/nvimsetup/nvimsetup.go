@@ -28,21 +28,20 @@ type Result struct {
 	Env  map[string]string
 }
 
-const remoteBase = "/tmp/rnvim"
-
 func Ensure(t transport.Transport, opt Options) (*Result, error) {
 	switch opt.Strategy {
 	case "", "auto":
-		if err := install(t, opt.LocalConfig); err == nil {
-			return &Result{Exec: "nvim", Env: map[string]string{}}, nil
+		if res, err := install(t, opt.LocalConfig); err == nil {
+			return res, nil
 		}
 		fmt.Fprintln(os.Stderr, "rnvim: network install unavailable, falling back to pushing local nvim + config")
 		return push(t, opt)
 	case "install":
-		if err := install(t, opt.LocalConfig); err != nil {
+		res, err := install(t, opt.LocalConfig)
+		if err != nil {
 			return nil, fmt.Errorf("install strategy failed: %w", err)
 		}
-		return &Result{Exec: "nvim", Env: map[string]string{}}, nil
+		return res, nil
 	case "push":
 		return push(t, opt)
 	default:
@@ -73,24 +72,53 @@ else
 fi
 `
 
-func install(t transport.Transport, localConfig string) error {
-	if _, err := t.Run(installScript); err != nil {
-		return err
-	}
-	if localConfig == "" {
-		return nil
-	}
-	if _, err := os.Stat(localConfig); err != nil {
-		return nil // no local config to copy, not an error
-	}
+// RemoteBase is where rnvim keeps everything it puts on a target, so the
+// target's own ~/.config/nvim, ~/.local/share/nvim, ~/.vim etc. are never
+// touched.
+func RemoteBase(t transport.Transport) string {
 	home, err := t.Home()
 	if err != nil || home == "" {
 		home = "/root"
 	}
-	if err := t.CopyTo(localConfig, home+"/.config/nvim"); err != nil {
-		return fmt.Errorf("copy config: %w", err)
+	return home + "/.rnvim"
+}
+
+// IsolatedEnv points nvim's XDG dirs into base and copies localConfig (if
+// it exists) to base/config/nvim.
+func IsolatedEnv(t transport.Transport, base, localConfig string) (map[string]string, error) {
+	env := map[string]string{
+		"XDG_CONFIG_HOME": base + "/config",
+		"XDG_DATA_HOME":   base + "/data",
+		"XDG_STATE_HOME":  base + "/state",
+		"XDG_CACHE_HOME":  base + "/cache",
 	}
-	return nil
+	if localConfig == "" {
+		return env, nil
+	}
+	if _, err := os.Stat(localConfig); err != nil {
+		return env, nil // no local config to copy, not an error
+	}
+	// CopyTo nests into an existing dir instead of replacing it, so clear
+	// the previous copy first.
+	dst := base + "/config/nvim"
+	if _, err := t.Run("rm -rf '" + dst + "'"); err != nil {
+		return nil, err
+	}
+	if err := t.CopyTo(localConfig, dst); err != nil {
+		return nil, fmt.Errorf("copy config: %w", err)
+	}
+	return env, nil
+}
+
+func install(t transport.Transport, localConfig string) (*Result, error) {
+	if _, err := t.Run(installScript); err != nil {
+		return nil, err
+	}
+	env, err := IsolatedEnv(t, RemoteBase(t), localConfig)
+	if err != nil {
+		return nil, err
+	}
+	return &Result{Exec: "nvim", Env: env}, nil
 }
 
 // push copies a local nvim binary + its runtime dir + the user's config
@@ -113,6 +141,7 @@ func push(t transport.Transport, opt Options) (*Result, error) {
 	if err := checkArchMatch(t); err != nil {
 		return nil, err
 	}
+	remoteBase := RemoteBase(t)
 
 	// Standard nvim install layouts (official tarball, Homebrew, apt, ...)
 	// put runtime files at <prefix>/share/nvim relative to <prefix>/bin/nvim.
@@ -127,21 +156,18 @@ func push(t transport.Transport, opt Options) (*Result, error) {
 	if _, err := t.Run("chmod +x " + remoteBase + "/bin/nvim"); err != nil {
 		return nil, err
 	}
+	if _, err := t.Run("rm -rf '" + remoteBase + "/share/nvim'"); err != nil {
+		return nil, err
+	}
 	if err := t.CopyTo(runtimeDir, remoteBase+"/share/nvim"); err != nil {
 		return nil, fmt.Errorf("copy nvim runtime: %w", err)
 	}
 
-	env := map[string]string{
-		"VIMRUNTIME": remoteBase + "/share/nvim/runtime",
+	env, err := IsolatedEnv(t, remoteBase, opt.LocalConfig)
+	if err != nil {
+		return nil, err
 	}
-	if opt.LocalConfig != "" {
-		if _, err := os.Stat(opt.LocalConfig); err == nil {
-			if err := t.CopyTo(opt.LocalConfig, remoteBase+"/xdgconfig/nvim"); err != nil {
-				return nil, fmt.Errorf("copy config: %w", err)
-			}
-			env["XDG_CONFIG_HOME"] = remoteBase + "/xdgconfig"
-		}
-	}
+	env["VIMRUNTIME"] = remoteBase + "/share/nvim/runtime"
 
 	return &Result{Exec: remoteBase + "/bin/nvim", Env: env}, nil
 }

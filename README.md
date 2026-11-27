@@ -27,7 +27,7 @@ rnvim connect ssh <[user@]host>          [--strategy auto|install|push] [--confi
 
 - `auto` (default): try installing `nvim` over the network first, using the target's package
   manager (apt/dnf/apk/pacman/brew). If that fails, automatically fall back to pushing the local
-  `nvim` binary + runtime + config to `/tmp/rnvim` on the target.
+  `nvim` binary + runtime + config to `~/.rnvim` on the target.
 - `install`: network install only. Exits with an error if it fails (no fallback).
 - `push`: always push the local `nvim` binary + config.
 

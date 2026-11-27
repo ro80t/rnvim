@@ -9,6 +9,9 @@ import (
 	"testing"
 )
 
+// fakeTransport.Home() returns "", so RemoteBase falls back to /root.
+const remoteBase = "/root/.rnvim"
+
 func TestEnsure_UnknownStrategy(t *testing.T) {
 	_, err := Ensure(&fakeTransport{}, Options{Strategy: "bogus"})
 	if err == nil || !strings.Contains(err.Error(), "unknown strategy") {
@@ -122,7 +125,7 @@ func TestPush_Success(t *testing.T) {
 	if res.Env["VIMRUNTIME"] != remoteBase+"/share/nvim/runtime" {
 		t.Errorf("VIMRUNTIME = %q", res.Env["VIMRUNTIME"])
 	}
-	if res.Env["XDG_CONFIG_HOME"] != remoteBase+"/xdgconfig" {
+	if res.Env["XDG_CONFIG_HOME"] != remoteBase+"/config" {
 		t.Errorf("XDG_CONFIG_HOME = %q", res.Env["XDG_CONFIG_HOME"])
 	}
 	if len(copied) != 3 {
@@ -150,4 +153,77 @@ func writeFakeNvimInstall(t *testing.T, dir string) string {
 		t.Fatal(err)
 	}
 	return nvimBin
+}
+
+func TestRemoteBase(t *testing.T) {
+	if got := RemoteBase(&fakeTransport{homeOut: "/home/dev"}); got != "/home/dev/.rnvim" {
+		t.Errorf("RemoteBase = %q, want /home/dev/.rnvim", got)
+	}
+	if got := RemoteBase(&fakeTransport{homeErr: errors.New("boom")}); got != "/root/.rnvim" {
+		t.Errorf("RemoteBase on Home error = %q, want /root/.rnvim", got)
+	}
+}
+
+func TestIsolatedEnv_SetsAllXDGDirsUnderBase(t *testing.T) {
+	env, err := IsolatedEnv(&fakeTransport{}, "/b", "")
+	if err != nil {
+		t.Fatalf("IsolatedEnv: %v", err)
+	}
+	want := map[string]string{
+		"XDG_CONFIG_HOME": "/b/config",
+		"XDG_DATA_HOME":   "/b/data",
+		"XDG_STATE_HOME":  "/b/state",
+		"XDG_CACHE_HOME":  "/b/cache",
+	}
+	for k, v := range want {
+		if env[k] != v {
+			t.Errorf("%s = %q, want %q", k, env[k], v)
+		}
+	}
+}
+
+func TestIsolatedEnv_MissingLocalConfigSkipsCopy(t *testing.T) {
+	fake := &fakeTransport{
+		runFunc:  func(s string) (string, error) { t.Errorf("unexpected Run(%q)", s); return "", nil },
+		copyFunc: func(l, r string) error { t.Errorf("unexpected CopyTo(%q, %q)", l, r); return nil },
+	}
+	if _, err := IsolatedEnv(fake, "/b", filepath.Join(t.TempDir(), "nope")); err != nil {
+		t.Fatalf("IsolatedEnv: %v", err)
+	}
+}
+
+func TestIsolatedEnv_ClearsOldConfigBeforeCopy(t *testing.T) {
+	var calls []string
+	fake := &fakeTransport{
+		runFunc:  func(s string) (string, error) { calls = append(calls, "run: "+s); return "", nil },
+		copyFunc: func(l, r string) error { calls = append(calls, "copy: "+r); return nil },
+	}
+	if _, err := IsolatedEnv(fake, "/b", t.TempDir()); err != nil {
+		t.Fatalf("IsolatedEnv: %v", err)
+	}
+	want := []string{"run: rm -rf '/b/config/nvim'", "copy: /b/config/nvim"}
+	if strings.Join(calls, "\n") != strings.Join(want, "\n") {
+		t.Errorf("calls = %q, want %q", calls, want)
+	}
+}
+
+func TestIsolatedEnv_CopyErrorPropagates(t *testing.T) {
+	copyErr := errors.New("disk full")
+	fake := &fakeTransport{copyFunc: func(string, string) error { return copyErr }}
+	if _, err := IsolatedEnv(fake, "/b", t.TempDir()); !errors.Is(err, copyErr) {
+		t.Fatalf("err = %v, want it to wrap %v", err, copyErr)
+	}
+}
+
+func TestEnsure_InstallStrategy_ReturnsIsolatedEnv(t *testing.T) {
+	res, err := Ensure(&fakeTransport{homeOut: "/home/dev"}, Options{Strategy: "install"})
+	if err != nil {
+		t.Fatalf("Ensure: %v", err)
+	}
+	if res.Exec != "nvim" {
+		t.Errorf("Exec = %q, want nvim", res.Exec)
+	}
+	if res.Env["XDG_DATA_HOME"] != "/home/dev/.rnvim/data" {
+		t.Errorf("XDG_DATA_HOME = %q", res.Env["XDG_DATA_HOME"])
+	}
 }

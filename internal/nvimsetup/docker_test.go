@@ -38,8 +38,20 @@ func TestEnsure_InstallStrategy_Docker(t *testing.T) {
 		t.Fatalf("nvim --version = %q, err=%v", out, err)
 	}
 
-	out, err = ct.Run("cat /root/.config/nvim/init.lua")
+	out, err = ct.Run("cat /root/.rnvim/config/nvim/init.lua")
 	if err != nil || !strings.Contains(out, sentinel) {
 		t.Fatalf("config was not copied: out=%q err=%v", out, err)
+	}
+
+	// Reconnecting must replace the config, not nest it as config/nvim/nvim.
+	if _, err := Ensure(ct, Options{Strategy: "install", LocalConfig: configDir}); err != nil {
+		t.Fatalf("second Ensure: %v", err)
+	}
+	if out, _ := ct.Run("test -e /root/.rnvim/config/nvim/" + filepath.Base(configDir) + " && echo nested"); strings.Contains(out, "nested") {
+		t.Fatal("second Ensure nested the config inside the previous copy")
+	}
+
+	if out, _ := ct.Run("test -e /root/.config/nvim && echo exists"); strings.Contains(out, "exists") {
+		t.Fatal("rnvim touched the target's own ~/.config/nvim")
 	}
 }
